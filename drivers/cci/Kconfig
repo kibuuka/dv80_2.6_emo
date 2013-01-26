@@ -1,0 +1,23 @@
+#
+# Compalcomm drivers
+#
+
+menuconfig CCI_DRIVERS
+        tristate "Compalcomm driver set for DA80."
+        default y
+
+if CCI_DRIVERS
+
+#huapu_cheng: start / 20110208 / sensors porting for gingerbread
+#source "drivers/cci/acceleration_sensor/Kconfig"
+#source "drivers/cci/geomagnetic_sensor/Kconfig"
+#source "drivers/cci/orientation_sensor/Kconfig"
+source "drivers/cci/light_sensor/Kconfig"
+source "drivers/cci/cci_kernel_info/Kconfig"
+source "drivers/cci/hall_sensor/Kconfig"
+#huapu_cheng: end
+#[DA80] ===> BugID#789 : CCI KLog Collector, added by Jimmy@CCI
+source "drivers/cci/klog_collector/Kconfig"
+#[DA80] <=== BugID#789 : CCI KLog Collector, added by Jimmy@CCI
+
+endif

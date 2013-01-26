@@ -1,0 +1,10 @@
+config CCI_KLOG_COLLECTOR
+	tristate "Kernel Log Collector"
+	default y
+
+config CCI_KLOG_RECORD_KERNEL_TIMESTAMP
+	bool "Record kernel timestmp into KLog header area"
+	depends on CCI_KLOG_COLLECTOR
+	default y
+	help
+	  This option enables KLog to record the kernel timestamp (clock and RTC) into the KLog header area (100 bytes).

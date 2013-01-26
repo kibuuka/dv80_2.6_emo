@@ -1,0 +1,3 @@
+config CCI_HALL_SENSOR
+	tristate "AsahiKASEI EM_6781_T3 Hall Sensor"
+	default y
