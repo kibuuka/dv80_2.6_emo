@@ -2101,7 +2101,7 @@ task_hot(struct task_struct *p, u64 now, struct sched_domain *sd)
 	return delta < (s64)sysctl_sched_migration_cost;
 }
 
-void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
+void set_task_cpu(struct task_struct *p, int new_cpu)
 {
 #ifdef CONFIG_SCHED_DEBUG
 	/*

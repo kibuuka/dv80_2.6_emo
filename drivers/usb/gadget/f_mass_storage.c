@@ -1234,12 +1234,12 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 	buf[6] = 0;
 	buf[7] = 0;
 
-	//B: Robert, 20111216, QCT8x60_CR1630 : Change default disk label and device name
+	//B: Robert, 20111208, QCT8x60_CR1556 : Change SBM default disk label and device name
 	if( common->lun == 0 )
 		snprintf(common->inquiry_string, sizeof common->inquiry_string, "%-8s%-16s%04x","DELL","Internal SD",0);
 	else
 		snprintf(common->inquiry_string, sizeof common->inquiry_string, "%-8s%-16s%04x","DELL","External SD",0);
-	//E: Robert, 20111216, QCT8x60_CR1630
+	//E: Robert, 20111208, QCT8x60_CR1556
 
 	memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
 	return 36;

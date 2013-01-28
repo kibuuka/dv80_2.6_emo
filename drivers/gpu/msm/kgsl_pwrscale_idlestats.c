@@ -13,7 +13,7 @@
 
 #include <linux/slab.h>
 #include <linux/timer.h>
-#include <linux/idle_stats_device.h>
+#include "idle_stats_device.h"
 #include <linux/cpufreq.h>
 #include <linux/notifier.h>
 #include <linux/cpumask.h>

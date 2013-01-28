@@ -173,6 +173,10 @@ struct kgsl_device_pwr_data {
 	int (*set_grp_async)(void);
 	unsigned int idle_timeout;
 	unsigned int nap_allowed;
+//kibuuka: needed by devices-8x60.c - subject to fix	
+	bool pwrrail_first;
+	unsigned int idle_pass;
+//kibuuka
 };
 
 struct kgsl_clk_data {

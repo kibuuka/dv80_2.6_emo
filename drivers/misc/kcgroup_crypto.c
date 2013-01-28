@@ -13,7 +13,7 @@
 #include <linux/scatterlist.h>
 #include <linux/syscalls.h>
 
-#include <kcgroup_crypto.h>
+#include "kcgroup_crypto.h"
 
 /*
  * Global variables.

@@ -701,7 +701,11 @@ fb_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 	u32 __iomem *src;
 	int c, i, cnt = 0, err = 0;
 	unsigned long total_size;
-
+//B: CH fix screen capture
+	u32 line, pos_line_byte, payload_byte, load_byte;
+	u32 pixel_x, pixel_x_layout, cur_access;
+	u32 tmp;
+//E: CH fix screen capture
 	if (!info || ! info->screen_base)
 		return -ENODEV;
 
@@ -729,27 +733,66 @@ fb_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 			 GFP_KERNEL);
 	if (!buffer)
 		return -ENOMEM;
+//B: CH fix screen capture
+	pixel_x=info->var.xres;
+	pixel_x_layout=(pixel_x%32)?(pixel_x/32+1)*32:pixel_x; 
+	payload_byte=pixel_x*4;
+	load_byte=pixel_x_layout*4;
+	line = p/payload_byte;
+	pos_line_byte=p%payload_byte;
+	//printk(KERN_ERR "j:%s total %lu access %lu count %u load_byte %u\n", __func__, total_size, p, count, load_byte);
+
+	p=line*load_byte+pos_line_byte; // calibrate to correct memory layout
+	//printk(KERN_ERR "j:%s calibrated access %lu\n", __func__, p);
 
 	src = (u32 __iomem *) (info->screen_base + p);
-
+	cur_access=p;
 	if (info->fbops->fb_sync)
 		info->fbops->fb_sync(info);
 
 	while (count) {
 		c  = (count > PAGE_SIZE) ? PAGE_SIZE : count;
 		dst = buffer;
-		for (i = c >> 2; i--; )
-			*dst++ = fb_readl(src++);
+
+
 		if (c & 3) {
 			u8 *dst8 = (u8 *) dst;
 			u8 __iomem *src8 = (u8 __iomem *) src;
 
-			for (i = c & 3; i--;)
-				*dst8++ = fb_readb(src8++);
-
+			for (i = c & 3; i>0;){
+				tmp=cur_access%load_byte; // check if the memory is meaningful.
+				if(tmp<payload_byte){
+					*dst8++ = fb_readb(src8++);
+					//printk(KERN_ERR "j:%s copy byte %u\n", __func__, cur_access);
+					++cur_access;
+					--i;
+				}
+				else{ // shift to next line start
+					tmp=(pixel_x_layout*4)-tmp;
+					//printk(KERN_ERR "j:%s move cur from %u to %u\n", __func__, cur_access, cur_access+tmp);
+					cur_access=cur_access+tmp;
+					src8+=tmp;
+				}
+			}
 			src = (u32 __iomem *) src8;
 		}
-
+		
+		for (i = c >> 2; i>0; ){
+			tmp=cur_access%load_byte;
+			if(tmp<payload_byte){ // if src is in safe position.
+				*dst++ = fb_readl(src++); // pixel copy
+				//printk(KERN_ERR "j:%s copy word %u\n", __func__, cur_access);
+				cur_access+=4;
+				--i;
+			}
+			else{ // shift to next line start
+				tmp=(pixel_x_layout*4)-tmp;
+				//printk(KERN_ERR "j:%s move cur from %u to %u\n", __func__, cur_access, cur_access+tmp);
+				cur_access=cur_access+tmp;
+				src+=tmp>>2;
+			}
+		}
+//E: CH fix screen capture
 		if (copy_to_user(buf, buffer, c)) {
 			err = -EFAULT;
 			break;

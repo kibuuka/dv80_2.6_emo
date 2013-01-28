@@ -315,7 +315,8 @@ include $(srctree)/scripts/Kbuild.include
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
-REAL_CC		= $(CROSS_COMPILE)gcc
+CC		= $(CROSS_COMPILE)gcc
+#REAL_CC		= $(CROSS_COMPILE)gcc
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -332,11 +333,11 @@ CHECK		= sparse
 
 # Use the wrapper for the compiler.  This wrapper scans for new
 # warnings and causes the build to stop upon encountering them.
-CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
+#CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-MODFLAGS	= -DMODULE
+MODFLAGS	= -DMODULE -fno-pic
 CFLAGS_MODULE   = $(MODFLAGS)
 AFLAGS_MODULE   = $(MODFLAGS)
 LDFLAGS_MODULE  = -T $(srctree)/scripts/module-common.lds
@@ -534,9 +535,9 @@ endif # $(dot-config)
 all: vmlinux
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS	+= -Os
+KBUILD_CFLAGS	+= -Os -mfpu=neon -mcpu=cortex-a8
 else
-KBUILD_CFLAGS	+= -O2
+KBUILD_CFLAGS	+= -O2 -mfpu=neon -mcpu=cortex-a8
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
@@ -549,6 +550,9 @@ endif
 ifndef CONFIG_CC_STACKPROTECTOR
 KBUILD_CFLAGS += $(call cc-option, -fno-stack-protector)
 endif
+
+# This warning generated too much noise in a regular build.
+KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
 
 ifdef CONFIG_FRAME_POINTER
 KBUILD_CFLAGS	+= -fno-omit-frame-pointer -fno-optimize-sibling-calls
@@ -574,19 +578,19 @@ ifeq ($(CCI_KLOG_COLLECTOR),1)
 		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_COLLECTOR=y
 	endif # ifndef CONFIG_CCI_KLOG_COLLECTOR
 	ifndef CONFIG_CCI_KLOG_START_ADDR_PHYSICAL
-		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_START_ADDR_PHYSICAL=$(CCI_KLOG_START_ADDR_PHYSICAL)
+		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_START_ADDR_PHYSICAL=0x48000000
 	endif # ifndef CONFIG_CCI_KLOG_START_ADDR_PHYSICAL
 	ifndef CONFIG_CCI_KLOG_START_ADDR_VIRTUAL
-		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_START_ADDR_VIRTUAL=$(CCI_KLOG_START_ADDR_VIRTUAL)
+		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_START_ADDR_VIRTUAL=0xFBD00000
 	endif # ifndef CONFIG_CCI_KLOG_START_ADDR_VIRTUAL
 	ifndef CONFIG_CCI_KLOG_SIZE
-		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_SIZE=$(CCI_KLOG_SIZE)
+		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_SIZE=0x00400000
 	endif # ifndef CONFIG_CCI_KLOG_SIZE
 	ifndef CONFIG_CCI_KLOG_HEADER_SIZE
-		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_HEADER_SIZE=$(CCI_KLOG_HEADER_SIZE)
+		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_HEADER_SIZE=0x00000400
 	endif # ifndef CONFIG_CCI_KLOG_HEADER_SIZE
 	ifndef CONFIG_CCI_KLOG_CATEGORY_SIZE
-		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_CATEGORY_SIZE=$(CCI_KLOG_CATEGORY_SIZE)
+		KBUILD_CFLAGS	+= -DCONFIG_CCI_KLOG_CATEGORY_SIZE=0x000FFC00
 	endif # ifndef CONFIG_CCI_KLOG_CATEGORY_SIZE
 ifeq ($(CCI_KLOG_ALLOW_FORCE_PANIC),1)
 	ifndef CONFIG_CCI_KLOG_ALLOW_FORCE_PANIC
@@ -615,7 +619,7 @@ CHECKFLAGS     += $(NOSTDINC_FLAGS)
 KBUILD_CFLAGS += $(call cc-option,-Wdeclaration-after-statement,)
 
 # disable pointer signed / unsigned warnings in gcc 4.0
-KBUILD_CFLAGS += $(call cc-option,-Wno-pointer-sign,)
+KBUILD_CFLAGS += $(call cc-disable-warning, pointer-sign)
 
 # disable invalid "can't wrap" optimizations for signed / pointers
 KBUILD_CFLAGS	+= $(call cc-option,-fno-strict-overflow)

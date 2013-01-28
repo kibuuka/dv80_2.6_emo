@@ -569,12 +569,12 @@ static int msm_batt_power_get_property(struct power_supply *psy,
 // modified by yafi-end
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = POWER_SUPPLY_TECHNOLOGY_NiMH;
+		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
 // modified by yafi-begin
 #if defined(ORG_VER)
 #else
 		pstr_prop = "BAT_TECHNOLOGY";
-		pstr_content = "NiMH";
+		pstr_content = "LION";
 #endif
 // modified by yafi-end
 		break;

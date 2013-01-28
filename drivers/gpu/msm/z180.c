@@ -11,6 +11,7 @@
  *
  */
 #include <linux/uaccess.h>
+#include <mach/internal_power_rail.h>
 
 #include "kgsl.h"
 #include "kgsl_cffdump.h"
