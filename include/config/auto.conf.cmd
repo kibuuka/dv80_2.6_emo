@@ -254,6 +254,7 @@ deps_config := \
 	drivers/video/msm/vidc/Kconfig \
 	drivers/video/msm/Kconfig \
 	drivers/video/geode/Kconfig \
+	drivers/gpu/ion/Kconfig \
 	drivers/gpu/msm/Kconfig \
 	drivers/gpu/drm/radeon/Kconfig \
 	drivers/gpu/drm/Kconfig \

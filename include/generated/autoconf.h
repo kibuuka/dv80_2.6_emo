@@ -1,7 +1,7 @@
 /*
  * Automatically generated C config: don't edit
  * Linux kernel version: 2.6.35.11
- * Mon Jan 28 09:19:28 2013
+ * Thu Jan 31 10:32:34 2013
  */
 #define AUTOCONF_INCLUDED
 #define CONFIG_RING_BUFFER 1
@@ -371,6 +371,7 @@
 #define CONFIG_CRYPTO_HW 1
 #define CONFIG_GENLOCK_MISCDEVICE 1
 #define CONFIG_FB_MSM_TVOUT_NONE 1
+#define CONFIG_ION 1
 #define CONFIG_USB_STORAGE_KARMA 1
 #define CONFIG_PHYS_OFFSET 0x40200000
 #define CONFIG_MSM_GEMINI 1
@@ -437,6 +438,7 @@
 #define CONFIG_MEDIA_TUNER_SIMPLE 1
 #define CONFIG_KEYBOARD_ATKBD 1
 #define CONFIG_NF_NAT 1
+#define CONFIG_ION_MSM 1
 #define CONFIG_CPU_IDLE 1
 #define CONFIG_MSM_MPM 1
 #define CONFIG_NFS_COMMON 1
