@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 6
 SUBLEVEL = 35
-EXTRAVERSION = .11
+EXTRAVERSION = .14
 NAME = Yokohama
 
 # *DOCUMENTATION*
@@ -550,6 +550,9 @@ endif
 ifndef CONFIG_CC_STACKPROTECTOR
 KBUILD_CFLAGS += $(call cc-option, -fno-stack-protector)
 endif
+
+# This warning generated too much noise in a regular build.
+KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
 
 # This warning generated too much noise in a regular build.
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)

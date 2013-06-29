@@ -8,7 +8,7 @@ obj-$(CONFIG_CCI_HALL_SENSOR)	+=	hall_sensor/
 #[DA80] ===> BugID#789 : CCI KLog Collector, added by Jimmy@CCI
 obj-$(CONFIG_CCI_KLOG_COLLECTOR)	+=	klog_collector/
 #[DA80] <=== BugID#789 : CCI KLog Collector, added by Jimmy@CCI
-obj-m += ../../../system/wlan/broadcom/src/
+#obj-m += ../../../system/wlan/broadcom/src/
 
 #leon_yang: S
 obj-$(CONFIG_CCI_KERNEL_INFO)	+=	cci_kernel_info/

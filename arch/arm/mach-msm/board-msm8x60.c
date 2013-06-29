@@ -763,22 +763,6 @@ int __init da_init_wifi_mem(void)
 	return 0;
 }
 
-/* BCM4329 returns wrong sdio_vsn(1) when we read cccr,
- * we use predefined value (sdio_vsn=2) here to initial sdio driver well
- */
-#if 0
-static uint32_t msm_wifi_setup_power(struct device *dv, unsigned int vdd)
-{
-	struct platform_device *pdev;
-
-	pdev = container_of(dv, struct platform_device, dev);
-
-	//printk(KERN_ERR "msm_wifi_setup_power : slot =%x,vdd =%x \n",pdev->id,vdd);
-	msm_sdcc_setup_gpio(pdev->id, !!vdd); //wifi GPIO close by SD owner
-	mdelay(5);
-	return 0;
-}
-#endif
 
 static int
 da_wifi_status_register(void (*callback)(int card_present, void *dev_id),
@@ -807,84 +791,7 @@ int da_wifi_set_carddetect(int val)
 	return 0;
 }
 
-#if 0 //Bruno , Test
-static uint32_t wlan_on_gpio_table[] = {
-	GPIO_CFG(DA_GPIO_WIFI_IRQ, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_4MA),
-	GPIO_CFG(WLAN_RESET, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_4MA),
-	GPIO_CFG(WLAN_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_4MA),
-};
 
-static uint32_t wlan_off_gpio_table[] = {
-	GPIO_CFG(DA_GPIO_WIFI_IRQ, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_4MA),
-	GPIO_CFG(WLAN_RESET, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_4MA),
-	GPIO_CFG(WLAN_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_4MA),
-};
-
-static void config_wifi_gpio_table(uint32_t *table, int len)
-{
-	int n, rc;
-	for (n = 0; n < len; n++) {
-		rc = gpio_tlmm_config(table[n], GPIO_CFG_ENABLE);
-		if (rc) {
-			pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
-				__func__, table[n], rc);
-			break;
-		}
-	}
-}
-int da_wifi_power(int on)
-{
-    int rc = 0;
-	printk(KERN_INFO "%s: %d\n", __func__, on);
-
-    if (on) {
-        config_wifi_gpio_table(wlan_on_gpio_table,
-		    ARRAY_SIZE(wlan_on_gpio_table));
-        
-        rc = gpio_request(WLAN_RESET, "WLAN_RESET");
-	    if (rc < 0) {
-            printk(KERN_ERR "%s: bcm4329 WLAN_RESET gpio %d request"
-			    "failed\n", __func__, WLAN_RESET);
-		    return rc;
-	    }
-        rc = gpio_request(WLAN_REG_ON, "WLAN_REG_ON");
-	    if (rc < 0) {
-            printk(KERN_ERR "%s: bcm4329 WLAN_REG_ON gpio %d request"
-			    "failed\n", __func__, WLAN_REG_ON);
-		    return rc;
-	    }
-
-        rc = gpio_request(DA_GPIO_WIFI_IRQ, "DA_GPIO_WIFI_IRQ");
-	    if (rc < 0) {
-            printk(KERN_ERR "%s: bcm4329 DA_GPIO_WIFI_IRQ gpio %d request"
-			    "failed\n", __func__, DA_GPIO_WIFI_IRQ);
-		    return rc;
-	    }
-
-	    gpio_direction_input(DA_GPIO_WIFI_IRQ);
-	    gpio_direction_output(WLAN_REG_ON, 0);
-	    gpio_direction_output(WLAN_RESET, 0);
-
-	    mdelay(20);
-	    gpio_set_value(WLAN_REG_ON, 1);
-	    gpio_set_value(WLAN_RESET, 1);
-	    mdelay(200);
-    } else {
-        config_wifi_gpio_table(wlan_off_gpio_table,
-		    ARRAY_SIZE(wlan_off_gpio_table));
-
-	    gpio_set_value(WLAN_REG_ON, 0);
-	    gpio_set_value(WLAN_RESET, 0);
-	    mdelay(20);
-	    gpio_free(WLAN_REG_ON);
-	    gpio_free(WLAN_RESET);
-	    gpio_free(DA_GPIO_WIFI_IRQ);
-    }
-	mdelay(100);
-    return rc;
-}
-
-#else
 int da_wifi_power(int on)
 {
 	printk(KERN_INFO "%s: %d\n", __func__, on);
@@ -902,7 +809,7 @@ int da_wifi_power(int on)
 
 	return 0;
 }
-#endif
+
 int da_wifi_reset(int on)
 {
 	printk(KERN_INFO "%s: do nothing\n", __func__);
@@ -911,7 +818,11 @@ int da_wifi_reset(int on)
 
 static struct resource da_wifi_resources[] = {
 	[0] = {
-		.name		= "wlan_bcm4329_irq",
+#if !defined(CONFIG_BCMDHD)
+		.name		= "bcm4329_wlan_irq",
+#else
+		.name		= "bcmdhd_wlan_irq",
+#endif
 		.start		= MSM_GPIO_TO_INT(DA_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(DA_GPIO_WIFI_IRQ),
 		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWEDGE,
@@ -926,7 +837,11 @@ static struct wifi_platform_data da_wifi_control = {
 };
 
 static struct platform_device da_wifi_device = {
-        .name           = "wlan_bcm4329",
+#if !defined(CONFIG_BCMDHD)
+        .name           = "bcm4329_wlan",
+#else
+         .name           = "bcmdhd_wlan",
+#endif       
         .id             = 1,
         .num_resources  = ARRAY_SIZE(da_wifi_resources),
         .resource       = da_wifi_resources,
@@ -968,32 +883,7 @@ static void brcm4329_init(void)
                        __func__, bcm4329_config_power_control[pin], ret);
         }
     }
-#if 0
-    //BCM4329 HW reset
-    gpio_set_value(BT_REG_ON,0);
-    gpio_set_value(BT_RST_N,0);
-    gpio_set_value(WLAN_REG_ON,0);
-    gpio_set_value(WLAN_RESET,0);
-    printk("[BCM4329] BT_REG_ON=%d, BT_RST_N=%d, WLAN_RESET=%d, WLAN_REG_ON=%d\n",
-	    gpio_get_value(BT_REG_ON), gpio_get_value(BT_RST_N), gpio_get_value(WLAN_RESET), gpio_get_value(WLAN_REG_ON));
-    mdelay(200);
 
-    gpio_set_value(BT_REG_ON,1);
-    gpio_set_value(WLAN_REG_ON,1);
-    mdelay(100);
-    gpio_set_value(BT_RST_N,1);
-    gpio_set_value(WLAN_RESET,1);
-    printk("[BCM4329] BT_REG_ON=%d, BT_RST_N=%d, WLAN_RESET=%d, WLAN_REG_ON=%d\n",
-	    gpio_get_value(BT_REG_ON), gpio_get_value(BT_RST_N), gpio_get_value(WLAN_RESET), gpio_get_value(WLAN_REG_ON));
-    mdelay(300);
-
-    gpio_set_value(BT_REG_ON,0);
-    gpio_set_value(BT_RST_N,0);
-    gpio_set_value(WLAN_REG_ON,0);
-    gpio_set_value(WLAN_RESET,0);
-    printk("[BCM4329] BT_REG_ON=%d, BT_RST_N=%d, WLAN_RESET=%d, WLAN_REG_ON=%d\n",
-	    gpio_get_value(BT_REG_ON), gpio_get_value(BT_RST_N), gpio_get_value(WLAN_RESET), gpio_get_value(WLAN_REG_ON));
-#endif
     //BCM4329 Wi-Fi device register
     da_wifi_init();
 }

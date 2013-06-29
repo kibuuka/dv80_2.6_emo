@@ -2043,7 +2043,7 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
 	status = IEEE80211_SKB_RXCB(rx->skb);
 
 	if (sdata->vif.type == NL80211_IFTYPE_STATION &&
-	    cfg80211_rx_action(rx->sdata->dev, status->freq,
+	    cfg80211_rx_mgmt(rx->sdata->dev, status->freq,
 			       rx->skb->data, rx->skb->len,
 			       GFP_ATOMIC))
 		goto handled;
@@ -2389,7 +2389,7 @@ static int prepare_for_handlers(struct ieee80211_sub_if_data *sdata,
 		break;
 	case NL80211_IFTYPE_MONITOR:
 	case NL80211_IFTYPE_UNSPECIFIED:
-	case __NL80211_IFTYPE_AFTER_LAST:
+	case NUM_NL80211_IFTYPES:
 		/* should never get here */
 		WARN_ON(1);
 		break;
