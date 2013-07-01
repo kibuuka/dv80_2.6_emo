@@ -41,6 +41,7 @@
 #include <linux/bitops.h>
 #include <linux/mpage.h>
 #include <linux/bit_spinlock.h>
+#include <linux/cleancache.h>
 
 static int fsync_buffers_list(spinlock_t *lock, struct list_head *list);
 
@@ -151,19 +152,17 @@ EXPORT_SYMBOL(end_buffer_read_sync);
 
 void end_buffer_write_sync(struct buffer_head *bh, int uptodate)
 {
-    //char b[BDEVNAME_SIZE]; //Robert, 20100618, KB62_CR339 : remove error log for gallery 3D write fail
+	char b[BDEVNAME_SIZE];
 
 	if (uptodate) {
 		set_buffer_uptodate(bh);
 	} else {
-	    #if 0 //Robert, 20100618, KB62_CR339 : remove error log for gallery 3D write fail
 		if (!buffer_eopnotsupp(bh) && !quiet_error(bh)) {
 			buffer_io_error(bh);
 			printk(KERN_WARNING "lost page write due to "
 					"I/O error on %s\n",
 				       bdevname(bh->b_bdev, b));
 		}
-		#endif
 		set_buffer_write_io_error(bh);
 		clear_buffer_uptodate(bh);
 	}
@@ -279,6 +278,10 @@ void invalidate_bdev(struct block_device *bdev)
 	invalidate_bh_lrus();
 	lru_add_drain_all();	/* make sure all lru add caches are flushed */
 	invalidate_mapping_pages(mapping, 0, -1);
+	/* 99% of the time, we don't need to flush the cleancache on the bdev.
+	 * But, for the strange corners, lets be cautious
+	 */
+	cleancache_flush_inode(mapping);
 }
 EXPORT_SYMBOL(invalidate_bdev);
 
@@ -371,7 +374,7 @@ still_busy:
  */
 void end_buffer_async_write(struct buffer_head *bh, int uptodate)
 {
-    //char b[BDEVNAME_SIZE]; //Robert, 20100618, KB62_CR339 : remove error log for gallery 3D write fail
+	char b[BDEVNAME_SIZE];
 	unsigned long flags;
 	struct buffer_head *first;
 	struct buffer_head *tmp;
@@ -383,14 +386,12 @@ void end_buffer_async_write(struct buffer_head *bh, int uptodate)
 	if (uptodate) {
 		set_buffer_uptodate(bh);
 	} else {
-	    #if 0 //Robert, 20100618, KB62_CR339 : remove error log for gallery 3D write fail
 		if (!quiet_error(bh)) {
 			buffer_io_error(bh);
 			printk(KERN_WARNING "lost page write due to "
 					"I/O error on %s\n",
 			       bdevname(bh->b_bdev, b));
 		}
-		#endif
 		set_bit(AS_EIO, &page->mapping->flags);
 		set_buffer_write_io_error(bh);
 		clear_buffer_uptodate(bh);
@@ -3041,6 +3042,9 @@ int submit_bh(int rw, struct buffer_head * bh)
 	 * submit_bio -> generic_make_request may further map this bio around
 	 */
 	bio = bio_alloc(GFP_NOIO, 1);
+
+	if (!bio)
+		return -ENOBUFS;
 
 	bio->bi_sector = bh->b_blocknr * (bh->b_size >> 9);
 	bio->bi_bdev = bh->b_bdev;
