@@ -70,8 +70,9 @@ static int yaffs_UpdateObjectHeader(yaffs_Object *in, const YCHAR *name,
 				int force, int isShrink, int shadows);
 static void yaffs_RemoveObjectFromDirectory(yaffs_Object *obj);
 static int yaffs_CheckStructures(void);
-static int yaffs_DeleteWorker(yaffs_Object *in, yaffs_Tnode *tn, __u32 level,
-			int chunkOffset, int *limit);
+/*static int yaffs_DeleteWorker(yaffs_Object *in, yaffs_Tnode *tn, __u32 level,
+			int chunkOffset, int *limit);*/
+/*Mark the unused function to remove warning message*/
 static int yaffs_DoGenericObjectDeletion(yaffs_Object *in);
 
 static yaffs_BlockInfo *yaffs_GetBlockInfo(yaffs_Device *dev, int blockNo);
@@ -596,7 +597,7 @@ static void yaffs_VerifyObjectHeader(yaffs_Object *obj, yaffs_ObjectHeader *oh, 
 }
 
 
-
+#if 0 /*Mark the unused function to remove warning message*/
 static int yaffs_VerifyTnodeWorker(yaffs_Object *obj, yaffs_Tnode *tn,
 					__u32 level, int chunkOffset)
 {
@@ -641,7 +642,7 @@ static int yaffs_VerifyTnodeWorker(yaffs_Object *obj, yaffs_Tnode *tn,
 	return ok;
 
 }
-
+#endif
 
 static void yaffs_VerifyFile(yaffs_Object *obj)
 {
@@ -1012,6 +1013,80 @@ static int yaffs_WriteNewChunkWithTagsToNAND(struct yaffs_DeviceStruct *dev,
 }
 
 /*
+ * Oldest Dirty Sequence Number handling.
+ */
+
+/* yaffs_CalcOldestDirtySequence()
+ * yaffs_FindOldestDirtySequence()
+ * Calculate the oldest dirty sequence number if we don't know it.
+ */
+static int yaffs_CalcOldestDirtySequence(yaffs_Device *dev)
+{
+	int i;
+	__u32 seq;
+	yaffs_BlockInfo *b = 0;
+
+	if (!dev->isYaffs2)
+		return 0;
+
+	/* Find the oldest dirty sequence number. */
+	seq = dev->sequenceNumber;
+	for (i = dev->internalStartBlock; i <= dev->internalEndBlock; i++) {
+		b = yaffs_GetBlockInfo(dev, i);
+		if (b->blockState == YAFFS_BLOCK_STATE_FULL &&
+		    (b->pagesInUse - b->softDeletions) < dev->nChunksPerBlock &&
+		    b->sequenceNumber < seq)
+				seq = b->sequenceNumber;
+	}
+	return seq;
+}
+
+
+static void yaffs_FindOldestDirtySequence(yaffs_Device *dev)
+{
+	if (dev->isYaffs2 && !dev->oldestDirtySequence)
+		dev->oldestDirtySequence =
+			yaffs_CalcOldestDirtySequence(dev);
+
+#if 0
+	if (!yaffs_SkipVerification(dev) &&
+		dev->oldestDirtySequence != yaffs_CalcOldestDirtySequence(dev))
+		YBUG();
+
+#endif
+}
+
+/*
+ * yaffs_ClearOldestDirtySequence()
+ * Called when a block is erased or marked bad. (ie. when its sequenceNumber
+ * becomes invalid). If the value matches the oldest then we clear
+ * dev->oldestDirtySequence to force its recomputation.
+ */
+static void yaffs_ClearOldestDirtySequence(yaffs_Device *dev,
+					yaffs_BlockInfo *bi)
+{
+	if (!dev->isYaffs2)
+		return;
+
+	if (!bi || bi->sequenceNumber == dev->oldestDirtySequence)
+		dev->oldestDirtySequence = 0;
+}
+
+/*
+ * yaffs_UpdateOldestDirtySequence()
+ * Update the oldest dirty sequence number whenever we dirty a block.
+ * Only do this if the oldestDirtySequence is actually being tracked.
+ */
+static void yaffs_UpdateOldestDirtySequence(yaffs_Device *dev,
+					yaffs_BlockInfo *bi)
+{
+	if (dev->isYaffs2 && dev->oldestDirtySequence) {
+		if (dev->oldestDirtySequence > bi->sequenceNumber)
+			dev->oldestDirtySequence = bi->sequenceNumber;
+	}
+}
+
+/*
  * Block retiring for handling a broken block.
  */
 
@@ -1020,6 +1095,8 @@ static void yaffs_RetireBlock(yaffs_Device *dev, int blockInNAND)
 	yaffs_BlockInfo *bi = yaffs_GetBlockInfo(dev, blockInNAND);
 
 	yaffs_InvalidateCheckpoint(dev);
+
+	yaffs_ClearOldestDirtySequence(dev, bi);
 
 	if (yaffs_MarkBlockBad(dev, blockInNAND) != YAFFS_OK) {
 		if (yaffs_EraseBlockInNAND(dev, blockInNAND) != YAFFS_OK) {
@@ -1567,7 +1644,7 @@ static int yaffs_FindChunkInGroup(yaffs_Device *dev, int theChunk,
  * Returns 1 if the tree was deleted.
  * Returns 0 if it stopped early due to hitting the limit and the delete is incomplete.
  */
-
+#if 0 /*Mark the unused function to remove warning message*/
 static int yaffs_DeleteWorker(yaffs_Object *in, yaffs_Tnode *tn, __u32 level,
 			      int chunkOffset, int *limit)
 {
@@ -1654,7 +1731,7 @@ static int yaffs_DeleteWorker(yaffs_Object *in, yaffs_Tnode *tn, __u32 level,
 	return 1;
 
 }
-
+#endif
 static void yaffs_SoftDeleteChunk(yaffs_Device *dev, int chunk)
 {
 	yaffs_BlockInfo *theBlock;
@@ -1665,6 +1742,7 @@ static void yaffs_SoftDeleteChunk(yaffs_Device *dev, int chunk)
 	if (theBlock) {
 		theBlock->softDeletions++;
 		dev->nFreeChunks++;
+		yaffs_UpdateOldestDirtySequence(dev, theBlock);
 	}
 }
 
@@ -2508,12 +2586,12 @@ int yaffs_RenameObject(yaffs_Object *oldDir, const YCHAR *oldName,
 			 * Note we must disable gc otherwise it can mess up the shadowing.
 			 *
 			 */
-			dev->isDoingGC=1;
+			dev->isDoingGC = 1;
 			yaffs_ChangeObjectName(obj, newDir, newName, force,
 						existingTarget->objectId);
 			existingTarget->isShadowed = 1;
 			yaffs_UnlinkObject(existingTarget);
-			dev->isDoingGC=0;
+			dev->isDoingGC = 0;
 		}
 
 		result = yaffs_ChangeObjectName(obj, newDir, newName, 1, 0);
@@ -2588,33 +2666,10 @@ static void yaffs_DeinitialiseBlocks(yaffs_Device *dev)
 static int yaffs_BlockNotDisqualifiedFromGC(yaffs_Device *dev,
 					yaffs_BlockInfo *bi)
 {
-	int i;
-	__u32 seq;
-	yaffs_BlockInfo *b;
-
 	if (!dev->isYaffs2)
 		return 1;	/* disqualification only applies to yaffs2. */
 
-	if (!bi->hasShrinkHeader)
-		return 1;	/* can gc */
-
-	/* Find the oldest dirty sequence number if we don't know it and save it
-	 * so we don't have to keep recomputing it.
-	 */
-	if (!dev->oldestDirtySequence) {
-		seq = dev->sequenceNumber;
-
-		for (i = dev->internalStartBlock; i <= dev->internalEndBlock;
-				i++) {
-			b = yaffs_GetBlockInfo(dev, i);
-			if (b->blockState == YAFFS_BLOCK_STATE_FULL &&
-			    (b->pagesInUse - b->softDeletions) <
-			    dev->nChunksPerBlock && b->sequenceNumber < seq) {
-				seq = b->sequenceNumber;
-			}
-		}
-		dev->oldestDirtySequence = seq;
-	}
+	yaffs_FindOldestDirtySequence(dev);
 
 	/* Can't do gc of this block if there are any blocks older than this one that have
 	 * discarded pages.
@@ -2717,10 +2772,8 @@ static int yaffs_FindBlockForGarbageCollection(yaffs_Device *dev,
 		   dev->nChunksPerBlock - pagesInUse, prioritised));
 	}
 
-	dev->oldestDirtySequence = 0;
-
 	if (dirtiest > 0)
-		dev->nonAggressiveSkip = 4;
+		dev->nonAggressiveSkip = 2;
 
 	return dirtiest;
 }
@@ -2738,6 +2791,8 @@ static void yaffs_BlockBecameDirty(yaffs_Device *dev, int blockNo)
 	T(YAFFS_TRACE_GC | YAFFS_TRACE_ERASE,
 		(TSTR("yaffs_BlockBecameDirty block %d state %d %s"TENDSTR),
 		blockNo, bi->blockState, (bi->needsRetiring) ? "needs retiring" : ""));
+
+	yaffs_ClearOldestDirtySequence(dev, bi);
 
 	bi->blockState = YAFFS_BLOCK_STATE_DIRTY;
 
@@ -3004,7 +3059,7 @@ static int yaffs_GarbageCollectBlock(yaffs_Device *dev, int block,
 	/* Take off the number of soft deleted entries because
 	 * they're going to get really deleted during GC.
 	 */
-	if(dev->gcChunk == 0) /* first time through for this block */
+	if (dev->gcChunk == 0) /* first time through for this block */
 		dev->nFreeChunks -= bi->softDeletions;
 
 	dev->isDoingGC = 1;
@@ -3585,6 +3640,8 @@ void yaffs_DeleteChunk(yaffs_Device *dev, int chunkId, int markNAND, int lyn)
 
 	bi = yaffs_GetBlockInfo(dev, block);
 
+	yaffs_UpdateOldestDirtySequence(dev, bi);
+
 	T(YAFFS_TRACE_DELETION,
 	  (TSTR("line %d delete of chunk %d" TENDSTR), lyn, chunkId));
 
@@ -4147,8 +4204,6 @@ static void yaffs_DeviceToCheckpointDevice(yaffs_CheckpointDevice *cp,
 	cp->nUnlinkedFiles = dev->nUnlinkedFiles;
 	cp->nBackgroundDeletions = dev->nBackgroundDeletions;
 	cp->sequenceNumber = dev->sequenceNumber;
-	cp->oldestDirtySequence = dev->oldestDirtySequence;
-
 }
 
 static void yaffs_CheckpointDeviceToDevice(yaffs_Device *dev,
@@ -4163,7 +4218,6 @@ static void yaffs_CheckpointDeviceToDevice(yaffs_Device *dev,
 	dev->nUnlinkedFiles = cp->nUnlinkedFiles;
 	dev->nBackgroundDeletions = cp->nBackgroundDeletions;
 	dev->sequenceNumber = cp->sequenceNumber;
-	dev->oldestDirtySequence = cp->oldestDirtySequence;
 }
 
 
@@ -6846,7 +6900,9 @@ static void yaffs_UpdateParent(yaffs_Object *obj)
 	obj->dirty = 1;
 	obj->yst_mtime = obj->yst_ctime = Y_CURRENT_TIME;
 
-	yaffs_UpdateObjectHeader(obj,NULL,0,0,0);
+#if 0
+	yaffs_UpdateObjectHeader(obj, NULL, 0, 0, 0);
+#endif
 }
 
 static void yaffs_RemoveObjectFromDirectory(yaffs_Object *obj)
@@ -7452,6 +7508,7 @@ int yaffs_GutsInitialise(yaffs_Device *dev)
 	dev->nErasedBlocks = 0;
 	dev->isDoingGC = 0;
 	dev->hasPendingPrioritisedGCs = 1; /* Assume the worst for now, will get fixed on first GC */
+	dev->oldestDirtySequence = 0;
 
 	/* Initialise temporary buffers and caches. */
 	if (!yaffs_InitialiseTempBuffers(dev))
@@ -7534,7 +7591,6 @@ int yaffs_GutsInitialise(yaffs_Device *dev)
 				dev->nDeletedFiles = 0;
 				dev->nUnlinkedFiles = 0;
 				dev->nBackgroundDeletions = 0;
-				dev->oldestDirtySequence = 0;
 
 				if (!init_failed && !yaffs_InitialiseBlocks(dev))
 					init_failed = 1;

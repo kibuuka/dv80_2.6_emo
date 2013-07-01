@@ -98,10 +98,8 @@ next:
 
 	*bh = sb_bread(sb, phys);
 	if (*bh == NULL) {
-		#if 0 //Robert, 20100618, KB62_CR339 : remove error log for thumbnail scanner
 		printk(KERN_ERR "FAT: Directory bread(block %llu) failed\n",
 		       (llu)phys);
-		#endif
 		/* skip this block */
 		*pos = (iblock + 1) << sb->s_blocksize_bits;
 		goto next;

@@ -82,33 +82,6 @@ static void bdi_queue_work(struct backing_dev_info *bdi,
 			wake_up_process(wb->task);
 	}
 }
-/*The function for ecryptfs sync*/
-static void bdi_queue_work_mil(struct backing_dev_info *bdi,
-		struct wb_writeback_work *work, struct super_block *sb)
-{
-	spin_lock(&bdi->wb_lock);
-	list_add_tail(&work->list, &bdi->work_list);
-	spin_unlock(&bdi->wb_lock);
-
-	/*
-	 * If the default thread isn't there, make sure we add it. When
-	 * it gets created and wakes up, we'll run this work.
-	 */
-	if (unlikely(list_empty_careful(&bdi->wb_list)))
-		wake_up_process(default_backing_dev_info.wb.task);
-	else {
-		struct bdi_writeback *wb = &bdi->wb;
-
-		if (wb->task)
-		{
-			while(((wb->task)->state) == TASK_RUNNING && !strcmp(((sb->s_type)->name), "ecryptfs"))
-			{
-				schedule();
-			}
-			wake_up_process(wb->task);
-		}
-	}
-}
 
 static void
 __bdi_start_writeback(struct backing_dev_info *bdi, long nr_pages,
@@ -804,6 +777,7 @@ long wb_do_writeback(struct bdi_writeback *wb, int force_wait)
  */
 int bdi_writeback_task(struct bdi_writeback *wb)
 {
+	struct backing_dev_info *bdi = wb->bdi;
 	unsigned long last_active = jiffies;
 	unsigned long wait_jiffies = -1UL;
 	long pages_written;
@@ -826,22 +800,17 @@ int bdi_writeback_task(struct bdi_writeback *wb)
 				break;
 		}
 
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (!list_empty(&bdi->work_list) || kthread_should_stop()) {
+			__set_current_state(TASK_RUNNING);
+			continue;
+		}
+
 		if (dirty_writeback_interval) {
 			wait_jiffies = msecs_to_jiffies(dirty_writeback_interval * 10);
-			#if 0 //B: Robert, 20111207, QCT8x60_CR1542 : Fix unexpectedly remove SD card issue
-			schedule_timeout_interruptible(wait_jiffies);
-			#else
-			if( !kthread_should_stop() )
-				schedule_timeout_interruptible(wait_jiffies);
-			else
-				printk("bdi_writeback_task: abort schedule_timeout_interruptible(wait_jiffies %lu)", wait_jiffies);
-			#endif //E: Robert, 20111207, QCT8x60_CR1542
+			schedule_timeout(wait_jiffies);
 		} else {
-			set_current_state(TASK_INTERRUPTIBLE);
-			if (list_empty_careful(&wb->bdi->work_list) &&
-			    !kthread_should_stop())
-				schedule();
-			__set_current_state(TASK_RUNNING);
+			schedule();
 		}
 
 		try_to_freeze();
@@ -926,6 +895,15 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 	struct super_block *sb = inode->i_sb;
 
 	/*
+	 * Make sure that changes are seen by all cpus before we test i_state
+	 * or mark anything as being dirty. Ie. all dirty state should be
+	 * written to the inode and visible. Like an "unlock" operation, the
+	 * mark_inode_dirty call must "release" our ordering window that is
+	 * opened when we started modifying the inode.
+	 */
+	smp_mb();
+
+	/*
 	 * Don't do this for I_DIRTY_PAGES - that doesn't actually
 	 * dirty the inode itself
 	 */
@@ -933,12 +911,6 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 		if (sb->s_op->dirty_inode)
 			sb->s_op->dirty_inode(inode);
 	}
-
-	/*
-	 * make sure that changes are seen by all cpus before we test i_state
-	 * -- mikulas
-	 */
-	smp_mb();
 
 	/* avoid the locking if we can */
 	if ((inode->i_state & flags) == flags)
@@ -1131,12 +1103,8 @@ void sync_inodes_sb(struct super_block *sb)
 	};
 
 	WARN_ON(!rwsem_is_locked(&sb->s_umount));
-/*add the conditional compile for sync ecryptfs --Millennium*/
-#ifdef CONFIG_SYNC_ECRYPTFS
-	bdi_queue_work_mil(sb->s_bdi, &work, sb);
-#else
+
 	bdi_queue_work(sb->s_bdi, &work);
-#endif
 	wait_for_completion(&done);
 
 	wait_sb_inodes(sb);
@@ -1197,3 +1165,23 @@ int sync_inode(struct inode *inode, struct writeback_control *wbc)
 	return ret;
 }
 EXPORT_SYMBOL(sync_inode);
+
+/**
+ * sync_inode_metadata - write an inode to disk
+ * @inode: the inode to sync
+ * @wait: wait for I/O to complete.
+ *
+ * Write an inode to disk and adjust its dirty state after completion.
+ *
+ * Note: only writes the actual inode, no associated data or other metadata.
+ */
+int sync_inode_metadata(struct inode *inode, int wait)
+{
+	struct writeback_control wbc = {
+		.sync_mode = wait ? WB_SYNC_ALL : WB_SYNC_NONE,
+		.nr_to_write = 0, /* metadata-only */
+	};
+
+	return sync_inode(inode, &wbc);
+}
+EXPORT_SYMBOL(sync_inode_metadata);

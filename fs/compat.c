@@ -266,7 +266,7 @@ asmlinkage long compat_sys_statfs(const char __user *pathname, struct compat_sta
 	error = user_path(pathname, &path);
 	if (!error) {
 		struct kstatfs tmp;
-		error = vfs_statfs(path.dentry, &tmp);
+		error = vfs_statfs(&path, &tmp);
 		if (!error)
 			error = put_compat_statfs(buf, &tmp);
 		path_put(&path);
@@ -284,7 +284,7 @@ asmlinkage long compat_sys_fstatfs(unsigned int fd, struct compat_statfs __user 
 	file = fget(fd);
 	if (!file)
 		goto out;
-	error = vfs_statfs(file->f_path.dentry, &tmp);
+	error = vfs_statfs(&file->f_path, &tmp);
 	if (!error)
 		error = put_compat_statfs(buf, &tmp);
 	fput(file);
@@ -334,7 +334,7 @@ asmlinkage long compat_sys_statfs64(const char __user *pathname, compat_size_t s
 	error = user_path(pathname, &path);
 	if (!error) {
 		struct kstatfs tmp;
-		error = vfs_statfs(path.dentry, &tmp);
+		error = vfs_statfs(&path, &tmp);
 		if (!error)
 			error = put_compat_statfs64(buf, &tmp);
 		path_put(&path);
@@ -355,7 +355,7 @@ asmlinkage long compat_sys_fstatfs64(unsigned int fd, compat_size_t sz, struct c
 	file = fget(fd);
 	if (!file)
 		goto out;
-	error = vfs_statfs(file->f_path.dentry, &tmp);
+	error = vfs_statfs(&file->f_path, &tmp);
 	if (!error)
 		error = put_compat_statfs64(buf, &tmp);
 	fput(file);
@@ -378,7 +378,7 @@ asmlinkage long compat_sys_ustat(unsigned dev, struct compat_ustat __user *u)
 	sb = user_get_super(new_decode_dev(dev));
 	if (!sb)
 		return -EINVAL;
-	err = vfs_statfs(sb->s_root, &sbuf);
+	err = statfs_by_dentry(sb->s_root, &sbuf);
 	drop_super(sb);
 	if (err)
 		return err;
@@ -1376,10 +1376,6 @@ static int compat_count(compat_uptr_t __user *argv, int max)
 			argv++;
 			if (i++ >= max)
 				return -E2BIG;
-
-			if (fatal_signal_pending(current))
-				return -ERESTARTNOHAND;
-			cond_resched();
 		}
 	}
 	return i;
@@ -1421,12 +1417,6 @@ static int compat_copy_strings(int argc, compat_uptr_t __user *argv,
 		while (len > 0) {
 			int offset, bytes_to_copy;
 
-			if (fatal_signal_pending(current)) {
-				ret = -ERESTARTNOHAND;
-				goto out;
-			}
-			cond_resched();
-
 			offset = pos % PAGE_SIZE;
 			if (offset == 0)
 				offset = PAGE_SIZE;
@@ -1443,8 +1433,18 @@ static int compat_copy_strings(int argc, compat_uptr_t __user *argv,
 			if (!kmapped_page || kpos != (pos & PAGE_MASK)) {
 				struct page *page;
 
-				page = get_arg_page(bprm, pos, 1);
-				if (!page) {
+#ifdef CONFIG_STACK_GROWSUP
+				ret = expand_stack_downwards(bprm->vma, pos);
+				if (ret < 0) {
+					/* We've exceed the stack rlimit. */
+					ret = -E2BIG;
+					goto out;
+				}
+#endif
+				ret = get_user_pages(current, bprm->mm, pos,
+						     1, 1, 1, &page, NULL);
+				if (ret <= 0) {
+					/* We've exceed the stack rlimit. */
 					ret = -E2BIG;
 					goto out;
 				}
@@ -1565,10 +1565,8 @@ int compat_do_execve(char * filename,
 	return retval;
 
 out:
-	if (bprm->mm) {
-		acct_arg_size(bprm, 0);
+	if (bprm->mm)
 		mmput(bprm->mm);
-	}
 
 out_file:
 	if (bprm->file) {

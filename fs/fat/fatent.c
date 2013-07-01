@@ -95,9 +95,7 @@ static int fat12_ent_bread(struct super_block *sb, struct fat_entry *fatent,
 err_brelse:
 	brelse(bhs[0]);
 err:
-    #if 0 //Robert, 20100618, KB62_CR339 : remove error log for gallery 3D write fail
 	printk(KERN_ERR "FAT: FAT read failed (blocknr %llu)\n", (llu)blocknr);
-	#endif
 	return -EIO;
 }
 
@@ -110,10 +108,8 @@ static int fat_ent_bread(struct super_block *sb, struct fat_entry *fatent,
 	fatent->fat_inode = MSDOS_SB(sb)->fat_inode;
 	fatent->bhs[0] = sb_bread(sb, blocknr);
 	if (!fatent->bhs[0]) {
-	    #if 0 //Robert, 20100618, KB62_CR339 : remove error log for gallery 3D write fail
 		printk(KERN_ERR "FAT: FAT read failed (blocknr %llu)\n",
 		       (llu)blocknr);
-        #endif
 		return -EIO;
 	}
 	fatent->nr_bhs = 1;

@@ -1193,7 +1193,10 @@ static pgoff_t ext4_num_dirty_pages(struct inode *inode, pgoff_t idx,
 			idx++;
 			num++;
 			if (num >= max_pages)
+			{
+				done = 1;
 				break;
+			}
 		}
 		pagevec_release(&pvec);
 	}
@@ -2976,9 +2979,13 @@ static int ext4_da_writepages(struct address_space *mapping,
 	 * sbi->max_writeback_mb_bump whichever is smaller.
 	 */
 	max_pages = sbi->s_max_writeback_mb_bump << (20 - PAGE_CACHE_SHIFT);
-	if (!range_cyclic && range_whole)
-		desired_nr_to_write = wbc->nr_to_write * 8;
-	else
+ 
+ 	if (!range_cyclic && range_whole) {
+ 		if (wbc->nr_to_write == LLONG_MAX)
+ 			desired_nr_to_write = wbc->nr_to_write;
+ 		else
+ 			desired_nr_to_write = wbc->nr_to_write * 8;
+ 	} else
 		desired_nr_to_write = ext4_num_dirty_pages(inode, index,
 							   max_pages);
 	if (desired_nr_to_write > max_pages)
@@ -5414,7 +5421,7 @@ int ext4_write_inode(struct inode *inode, struct writeback_control *wbc)
 		err = __ext4_get_inode_loc(inode, &iloc, 0);
 		if (err)
 			return err;
-		if (wbc->sync_mode == WB_SYNC_ALL)
+		if (1 /* XXX: fix fxync and use wbc->sync_mode == WB_SYNC_ALL */)
 			sync_dirty_buffer(iloc.bh);
 		if (buffer_req(iloc.bh) && !buffer_uptodate(iloc.bh)) {
 			EXT4_ERROR_INODE(inode,

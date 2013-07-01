@@ -194,12 +194,6 @@ static int acl_permission_check(struct inode *inode, int mask,
 	 */
 	if ((mask & ~mode) == 0)
 		return 0;
-
-	//B: Robert, 20110801, QCT8x60_CR570 : Dual SD Card support (Internal eMMC Partition and External SD)
-	if( (current_fsuid()==inode->i_uid) && (inode->i_uid==1000) ) //1000 for AID_SYSTEM
-		return 0;
-	//E: Robert, 20110801, QCT8x60_CR570
-
 	return -EACCES;
 }
 
@@ -490,13 +484,8 @@ ok:
 
 static __always_inline void set_root(struct nameidata *nd)
 {
-	if (!nd->root.mnt) {
-		struct fs_struct *fs = current->fs;
-		read_lock(&fs->lock);
-		nd->root = fs->root;
-		path_get(&nd->root);
-		read_unlock(&fs->lock);
-	}
+	if (!nd->root.mnt)
+		get_fs_root(current->fs, &nd->root);
 }
 
 static int link_path_walk(const char *, struct nameidata *);
@@ -607,15 +596,16 @@ int follow_up(struct path *path)
 {
 	struct vfsmount *parent;
 	struct dentry *mountpoint;
-	spin_lock(&vfsmount_lock);
+
+	br_read_lock(vfsmount_lock);
 	parent = path->mnt->mnt_parent;
 	if (parent == path->mnt) {
-		spin_unlock(&vfsmount_lock);
+		br_read_unlock(vfsmount_lock);
 		return 0;
 	}
 	mntget(parent);
 	mountpoint = dget(path->mnt->mnt_mountpoint);
-	spin_unlock(&vfsmount_lock);
+	br_read_unlock(vfsmount_lock);
 	dput(path->dentry);
 	path->dentry = mountpoint;
 	mntput(path->mnt);
@@ -718,6 +708,11 @@ static int do_lookup(struct nameidata *nd, struct qstr *name,
 			return err;
 	}
 
+	/*
+	 * Rename seqlock is not required here because in the off chance
+	 * of a false negative due to a concurrent rename, we're going to
+	 * do the non-racy lookup, below.
+	 */
 	dentry = __d_lookup(nd->path.dentry, name);
 	if (!dentry)
 		goto need_lookup;
@@ -736,17 +731,13 @@ need_lookup:
 	mutex_lock(&dir->i_mutex);
 	/*
 	 * First re-do the cached lookup just in case it was created
-	 * while we waited for the directory semaphore..
+	 * while we waited for the directory semaphore, or the first
+	 * lookup failed due to an unrelated rename.
 	 *
-	 * FIXME! This could use version numbering or similar to
-	 * avoid unnecessary cache lookups.
-	 *
-	 * The "dcache_lock" is purely to protect the RCU list walker
-	 * from concurrent renames at this point (we mustn't get false
-	 * negatives from the RCU list walk here, unlike the optimistic
-	 * fast walk).
-	 *
-	 * so doing d_lookup() (with seqlock), instead of lockfree __d_lookup
+	 * This could use version numbering or similar to avoid unnecessary
+	 * cache lookups, but then we'd have to do the first lookup in the
+	 * non-racy way. However in the common case here, everything should
+	 * be hot in cache, so would it be a big win?
 	 */
 	dentry = d_lookup(parent, name);
 	if (!dentry) {
@@ -1022,11 +1013,7 @@ static int path_init(int dfd, const char *name, unsigned int flags, struct namei
 		nd->path = nd->root;
 		path_get(&nd->root);
 	} else if (dfd == AT_FDCWD) {
-		struct fs_struct *fs = current->fs;
-		read_lock(&fs->lock);
-		nd->path = fs->pwd;
-		path_get(&fs->pwd);
-		read_unlock(&fs->lock);
+		get_fs_pwd(current->fs, &nd->path);
 	} else {
 		struct dentry *dentry;
 
@@ -1146,13 +1133,12 @@ static struct dentry *__lookup_hash(struct qstr *name,
 			goto out;
 	}
 
-	dentry = __d_lookup(base, name);
-
-	/* lockess __d_lookup may fail due to concurrent d_move()
-	 * in some unrelated directory, so try with d_lookup
+	/*
+	 * Don't bother with __d_lookup: callers are for creat as
+	 * well as unlink, so a lot of the time it would cost
+	 * a double lookup.
 	 */
-	if (!dentry)
-		dentry = d_lookup(base, name);
+	dentry = d_lookup(base, name);
 
 	if (dentry && dentry->d_op && dentry->d_op->d_revalidate)
 		dentry = do_revalidate(dentry, nd);

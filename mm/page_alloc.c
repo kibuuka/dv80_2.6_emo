@@ -3200,9 +3200,6 @@ static void setup_zone_migrate_reserve(struct zone *zone)
 	unsigned long block_migratetype;
 	int reserve;
 
-#ifdef CONFIG_DONT_RESERVE_FROM_MOVABLE_ZONE
-	return;
-#endif
 	/* Get the start pfn, end pfn and the number of blocks to reserve */
 	start_pfn = zone->zone_start_pfn;
 	end_pfn = start_pfn + zone->spanned_pages;
@@ -4028,7 +4025,7 @@ static void __init setup_usemap(struct pglist_data *pgdat,
 		zone->pageblock_flags = alloc_bootmem_node(pgdat, usemapsize);
 }
 #else
-static inline void setup_usemap(struct pglist_data *pgdat,
+static void inline setup_usemap(struct pglist_data *pgdat,
 				struct zone *zone, unsigned long zonesize) {}
 #endif /* CONFIG_SPARSEMEM */
 
