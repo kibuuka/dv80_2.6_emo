@@ -9,6 +9,7 @@ TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/arm/boot/zImage
 KERNEL_HEADERS_INSTALL := $(KERNEL_OUT)/usr
 KERNEL_MODULES_INSTALL := system
 KERNEL_MODULES_OUT := $(TARGET_OUT)/lib/modules
+DHD_MODULES_OUT := $(TARGET_OUT)/lib/modules
 
 #[DA80] ===> BugID#789 : CCI KLog Collector, added by Jimmy@CCI
 ifeq ($(CCI_TARGET_KLOG_COLLECTOR),true)

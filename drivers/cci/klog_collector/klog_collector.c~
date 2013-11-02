@@ -25,14 +25,6 @@ MODULE_DESCRIPTION("Kernel Log Collector");
 * Local Variable/Structure Declaration
 *******************************************************************************/
 
-//kibuuka: there's some glitch in top-level Makefile
-
-#define CONFIG_CCI_KLOG_START_ADDR_PHYSICAL 0x48000000 
-#define CONFIG_CCI_KLOG_START_ADDR_VIRTUAL 0xFBD00000 
-#define CONFIG_CCI_KLOG_SIZE 0x00400000 
-#define CONFIG_CCI_KLOG_HEADER_SIZE 0x00000400
-#define CONFIG_CCI_KLOG_CATEGORY_SIZE 0x000FFC00
-
 /* Check Invalid Category */
 #define CHK_CATEGORY(x) \
 				do\

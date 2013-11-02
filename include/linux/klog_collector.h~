@@ -1,9 +1,6 @@
 
 #define NAME_SIZE				32
 
-//kibuuka: There's a glitch in top-level Makefile
-#define CONFIG_CCI_KLOG_CATEGORY_SIZE		0x000FFC00
-
 #define KLOG_IOCTL_ID				0xD1
 #define KLOG_IOCTL_GET_HEADER			_IO(KLOG_IOCTL_ID, 1)
 #define KLOG_IOCTL_GET_KERNEL			_IO(KLOG_IOCTL_ID, 2)

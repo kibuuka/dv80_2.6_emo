@@ -41,6 +41,14 @@
  */
 unsigned int msm_shared_ram_phys = 0x00100000;
 
+//kibuuka: there's some glitch in top-level Makefile
+
+#define CONFIG_CCI_KLOG_START_ADDR_PHYSICAL 0x48000000 
+#define CONFIG_CCI_KLOG_START_ADDR_VIRTUAL 0xFBD00000 
+#define CONFIG_CCI_KLOG_SIZE 0x00400000 
+#define CONFIG_CCI_KLOG_HEADER_SIZE 0x00000400
+#define CONFIG_CCI_KLOG_CATEGORY_SIZE 0x000FFC00
+
 //[DA80] ===> BugID#789 : CCI KLog Collector, added by Jimmy@CCI
 #ifdef CONFIG_CCI_KLOG_COLLECTOR
 unsigned int msm_klog_phys = CONFIG_CCI_KLOG_START_ADDR_PHYSICAL;

@@ -1,4 +1,5 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2011 Sony Ericsson Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,7 +14,6 @@
 #include <linux/interrupt.h>
 #include <linux/err.h>
 #include <mach/msm_iomap.h>
-#include <mach/socinfo.h>
 
 #include "kgsl.h"
 #include "kgsl_pwrscale.h"
@@ -99,8 +99,8 @@ done:
 }
 
 static int kgsl_pwrctrl_max_gpuclk_store(struct device *dev,
-				     struct device_attribute *attr,
-				     const char *buf, size_t count)
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
 {
 	return __gpuclk_store(1, dev, attr, buf, count);
 }
@@ -219,8 +219,8 @@ static int kgsl_pwrctrl_idle_timer_store(struct device *dev,
 }
 
 static int kgsl_pwrctrl_idle_timer_show(struct device *dev,
-				    struct device_attribute *attr,
-				    char *buf)
+					struct device_attribute *attr,
+					char *buf)
 {
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
 	if (device == NULL)
@@ -364,9 +364,9 @@ void kgsl_pwrctrl_axi(struct kgsl_device *device, int state)
 				clk_set_rate(pwr->ebi1_clk,
 					pwr->pwrlevels[pwr->active_pwrlevel].
 					bus_freq);
+			}
 		}
 	}
-}
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_axi);
 
@@ -382,7 +382,7 @@ void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, int state)
 				"power off, device %d\n", device->id);
 			if (pwr->gpu_reg)
 				regulator_disable(pwr->gpu_reg);
-			}
+		}
 	} else if (state == KGSL_PWRFLAGS_ON) {
 		if (!test_and_set_bit(KGSL_PWRFLAGS_POWER_ON,
 			&pwr->power_flags)) {
@@ -416,9 +416,9 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, int state)
 			if (in_interrupt())
 				disable_irq_nosync(pwr->interrupt_num);
 			else
-			disable_irq(pwr->interrupt_num);
+				disable_irq(pwr->interrupt_num);
+		}
 	}
-}
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_irq);
 
@@ -463,11 +463,13 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	pwr->num_pwrlevels = pdata_pwr->num_levels;
 	pwr->active_pwrlevel = pdata_pwr->init_level;
 	for (i = 0; i < pdata_pwr->num_levels; i++) {
-		pwr->pwrlevels[i].gpu_freq =
-		(pdata_pwr->pwrlevel[i].gpu_freq > 0) ?
-		clk_round_rate(pwr->grp_clks[0],
-					   pdata_pwr->pwrlevel[i].
-					   gpu_freq) : 0;
+//		pwr->pwrlevels[i].gpu_freq =
+//		(pdata_pwr->pwrlevel[i].gpu_freq > 0) ?
+//		clk_round_rate(pwr->grp_clks[0],
+//					   pdata_pwr->pwrlevel[i].
+//					   gpu_freq) : 0;
+                pwr->pwrlevels[i].gpu_freq =(pdata_pwr->pwrlevel[i].gpu_freq > 0)?
+                                        pdata_pwr->pwrlevel[i].gpu_freq:0;
 		pwr->pwrlevels[i].bus_freq =
 			pdata_pwr->pwrlevel[i].bus_freq;
 	}
@@ -546,7 +548,7 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 		if (pwr->grp_clks[i]) {
 			clk_put(pwr->grp_clks[i]);
 			pwr->grp_clks[i] = NULL;
-	}
+		}
 
 	pwr->grp_clks[0] = NULL;
 	pwr->power_flags = 0;
@@ -572,7 +574,7 @@ void kgsl_idle_check(struct work_struct *work)
 			if (device->pwrctrl.busy.no_nap_cnt > UPDATE_BUSY) {
 				kgsl_pwrctrl_busy_time(device, true);
 				device->pwrctrl.busy.no_nap_cnt = 0;
-	}
+			}
 		}
 	} else if (device->state & (KGSL_STATE_HUNG |
 					KGSL_STATE_DUMP_AND_RECOVER)) {

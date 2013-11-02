@@ -818,11 +818,11 @@ int da_wifi_reset(int on)
 
 static struct resource da_wifi_resources[] = {
 	[0] = {
-#if !defined(CONFIG_BCMDHD)
-		.name		= "bcm4329_wlan_irq",
-#else
-		.name		= "bcmdhd_wlan_irq",
-#endif
+//#if !defined(CONFIG_BCMDHD)
+		.name		= "wlan_bcm4329_irq",
+//#else
+//		.name		= "bcmdhd_wlan_irq",
+//#endif
 		.start		= MSM_GPIO_TO_INT(DA_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(DA_GPIO_WIFI_IRQ),
 		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWEDGE,
@@ -837,11 +837,11 @@ static struct wifi_platform_data da_wifi_control = {
 };
 
 static struct platform_device da_wifi_device = {
-#if !defined(CONFIG_BCMDHD)
-        .name           = "bcm4329_wlan",
-#else
-         .name           = "bcmdhd_wlan",
-#endif       
+//#if !defined(CONFIG_BCMDHD)
+        .name           = "wlan_bcm4329",
+//#else
+//         .name           = "bcmdhd_wlan",
+//#endif       
         .id             = 1,
         .num_resources  = ARRAY_SIZE(da_wifi_resources),
         .resource       = da_wifi_resources,
@@ -4160,7 +4160,7 @@ static struct platform_device android_pmem_kernel_smi_device = {
 #ifdef CONFIG_ANDROID_PMEM
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
-	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 1,
 };
 

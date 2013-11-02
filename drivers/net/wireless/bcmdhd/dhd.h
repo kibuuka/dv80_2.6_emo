@@ -760,5 +760,6 @@ void dhd_aoe_arp_clr(dhd_pub_t *dhd);
 int dhd_arp_get_arp_hostip_table(dhd_pub_t *dhd, void *buf, int buflen);
 void dhd_arp_offload_add_ip(dhd_pub_t *dhd, uint32 ipaddr);
 #endif /* ARP_OFFLOAD_SUPPORT */
+extern int system_loading_update(enum module_loading_op action, int id, int loading);
 
 #endif /* _dhd_h_ */

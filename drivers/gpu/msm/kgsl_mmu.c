@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,7 +38,7 @@ static int kgsl_cleanup_pt(struct kgsl_pagetable *pt)
 		struct kgsl_device *device = kgsl_driver.devp[i];
 		if (device)
 			device->ftbl->cleanup_pt(device, pt);
-}
+	}
 	return 0;
 }
 
@@ -87,7 +87,7 @@ kgsl_get_pagetable(unsigned long name)
 
 	spin_unlock_irqrestore(&kgsl_driver.ptlock, flags);
 	return ret;
-	}
+}
 
 static struct kgsl_pagetable *
 _get_pt_from_kobj(struct kobject *kobj)
@@ -170,7 +170,7 @@ sysfs_show_max_mapped(struct kobject *kobj,
 
 	kgsl_put_pagetable(pt);
 	return ret;
-	}
+}
 
 static ssize_t
 sysfs_show_max_entries(struct kobject *kobj,
@@ -187,7 +187,7 @@ sysfs_show_max_entries(struct kobject *kobj,
 
 	kgsl_put_pagetable(pt);
 	return ret;
-	}
+}
 
 static struct kobj_attribute attr_entries = {
 	.attr = { .name = "entries", .mode = 0444 },
@@ -265,7 +265,7 @@ err:
 	}
 
 	return ret;
-	}
+}
 
 unsigned int kgsl_mmu_get_current_ptbase(struct kgsl_device *device)
 {
@@ -284,7 +284,7 @@ kgsl_mmu_get_ptname_from_ptbase(unsigned int pt_base)
 	int ptid = -1;
 
 	spin_lock(&kgsl_driver.ptlock);
-	list_for_each_entry(pt,	&kgsl_driver.pagetable_list, list) {
+	list_for_each_entry(pt, &kgsl_driver.pagetable_list, list) {
 		if (pt->pt_ops->mmu_pt_equal(pt, pt_base)) {
 			ptid = (int) pt->name;
 			break;
@@ -357,7 +357,7 @@ void kgsl_mh_intrcallback(struct kgsl_device *device)
 
 	status &= KGSL_MMU_INT_MASK;
 	kgsl_regwrite(device, MH_INTERRUPT_CLEAR, status);
-		}
+}
 EXPORT_SYMBOL(kgsl_mh_intrcallback);
 
 static int kgsl_setup_pt(struct kgsl_pagetable *pt)
@@ -409,7 +409,7 @@ static struct kgsl_pagetable *kgsl_mmu_createpagetableobject(
 	if (pagetable->pool == NULL) {
 		KGSL_CORE_ERR("gen_pool_create(%d) failed\n", PAGE_SHIFT);
 		goto err_alloc;
-		}
+	}
 
 	if (gen_pool_add(pagetable->pool, KGSL_PAGETABLE_BASE,
 				CONFIG_MSM_KGSL_PAGE_TABLE_SIZE, -1)) {
@@ -445,7 +445,7 @@ err_alloc:
 	kfree(pagetable);
 
 	return NULL;
-	}
+}
 
 struct kgsl_pagetable *kgsl_mmu_getpagetable(unsigned long name)
 {
@@ -454,7 +454,8 @@ struct kgsl_pagetable *kgsl_mmu_getpagetable(unsigned long name)
 	if (KGSL_MMU_TYPE_NONE == kgsl_mmu_type)
 		return (void *)(-1);
 
-#ifndef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
+#ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
+#else
 		name = KGSL_MMU_GLOBAL_PT;
 #endif
 	pt = kgsl_get_pagetable(name);
@@ -463,7 +464,7 @@ struct kgsl_pagetable *kgsl_mmu_getpagetable(unsigned long name)
 		pt = kgsl_mmu_createpagetableobject(name);
 
 	return pt;
-	}
+}
 
 void kgsl_mmu_putpagetable(struct kgsl_pagetable *pagetable)
 {
@@ -518,7 +519,7 @@ void kgsl_mh_start(struct kgsl_device *device)
 	 * Interrupts are enabled on a per-device level when
 	 * kgsl_pwrctrl_irq() is called
 	 */
-	}
+}
 
 int
 kgsl_mmu_map(struct kgsl_pagetable *pagetable,
@@ -591,6 +592,12 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable,
 			memdesc->gpuaddr & KGSL_MMU_ALIGN_MASK,
 			memdesc->size);
 
+	/*
+	 * Don't clear the gpuaddr on global mappings because they
+	 * may be in use by other pagetables
+	 */
+	if (!(memdesc->priv & KGSL_MEMFLAGS_GLOBAL))
+	memdesc->gpuaddr = 0;
 	return 0;
 }
 EXPORT_SYMBOL(kgsl_mmu_unmap);
@@ -622,6 +629,7 @@ int kgsl_mmu_map_global(struct kgsl_pagetable *pagetable,
 			gpuaddr, memdesc->gpuaddr);
 		goto error_unmap;
 	}
+	memdesc->priv |= KGSL_MEMFLAGS_GLOBAL;
 	return result;
 error_unmap:
 	kgsl_mmu_unmap(pagetable, memdesc);
@@ -638,7 +646,7 @@ int kgsl_mmu_stop(struct kgsl_device *device)
 		return 0;
 	else
 		return mmu->mmu_ops->mmu_stop(device);
-	}
+}
 EXPORT_SYMBOL(kgsl_mmu_stop);
 
 int kgsl_mmu_close(struct kgsl_device *device)
@@ -646,7 +654,7 @@ int kgsl_mmu_close(struct kgsl_device *device)
 	struct kgsl_mmu *mmu = &device->mmu;
 
 	if (kgsl_mmu_type == KGSL_MMU_TYPE_NONE)
-	return 0;
+		return 0;
 	else
 		return mmu->mmu_ops->mmu_close(device);
 }
@@ -709,6 +717,7 @@ void kgsl_mmu_set_mmutype(char *mmutype)
 	kgsl_mmu_type = KGSL_MMU_TYPE_NONE;
 #ifdef CONFIG_MSM_KGSL_GPUMMU
 	kgsl_mmu_type = KGSL_MMU_TYPE_GPU;
+#elif defined(CONFIG_MSM_KGSL_IOMMU)
 #endif
 	if (mmutype && !strncmp(mmutype, "gpummu", 6))
 		kgsl_mmu_type = KGSL_MMU_TYPE_GPU;

@@ -54,6 +54,7 @@
 #include <linux/perf_event.h>
 #include <linux/kprobes.h>
 #include <linux/pipe_fs_i.h>
+#include <linux/oom.h>
 
 #include <asm/uaccess.h>
 #include <asm/processor.h>
@@ -82,9 +83,6 @@
 /* External variables not in a header file. */
 extern int sysctl_overcommit_memory;
 extern int sysctl_overcommit_ratio;
-extern int sysctl_panic_on_oom;
-extern int sysctl_oom_kill_allocating_task;
-extern int sysctl_oom_dump_tasks;
 extern int max_threads;
 extern int core_uses_pid;
 extern int suid_dumpable;
@@ -116,7 +114,12 @@ static int zero;
 static int __maybe_unused one = 1;
 static int __maybe_unused two = 2;
 static unsigned long one_ul = 1;
-static int one_hundred = 100;
+static int __maybe_unused one_hundred = 100;
+#ifdef CONFIG_SCHED_BFS
+extern int rr_interval;
+extern int sched_iso_cpu;
+static int __read_mostly one_thousand = 1000;
+#endif
 #ifdef CONFIG_PRINTK
 static int ten_thousand = 10000;
 #endif
@@ -253,7 +256,7 @@ static struct ctl_table root_table[] = {
 	{ }
 };
 
-#ifdef CONFIG_SCHED_DEBUG
+#if defined(CONFIG_SCHED_DEBUG) && !defined(CONFIG_SCHED_BFS)
 static int min_sched_granularity_ns = 100000;		/* 100 usecs */
 static int max_sched_granularity_ns = NSEC_PER_SEC;	/* 1 second */
 static int min_wakeup_granularity_ns;			/* 0 usecs */
@@ -270,6 +273,7 @@ static int max_extfrag_threshold = 1000;
 #endif
 
 static struct ctl_table kern_table[] = {
+#ifndef CONFIG_SCHED_BFS
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -383,6 +387,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#endif /* !CONFIG_SCHED_BFS */
 #ifdef CONFIG_PROVE_LOCKING
 	{
 		.procname	= "prove_locking",
@@ -780,6 +785,26 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= proc_dointvec,
 	},
 #endif
+#ifdef CONFIG_SCHED_BFS
+	{
+		.procname	= "rr_interval",
+		.data		= &rr_interval,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec_minmax,
+		.extra1		= &one,
+		.extra2		= &one_thousand,
+	},
+	{
+		.procname	= "iso_cpu",
+		.data		= &sched_iso_cpu,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec_minmax,
+		.extra1		= &zero,
+		.extra2		= &one_hundred,
+	},
+#endif
 #if defined(CONFIG_S390) && defined(CONFIG_SMP)
 	{
 		.procname	= "spin_retry",
@@ -954,15 +979,6 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
-#endif
-#ifdef CONFIG_ARM
-	{
-		.procname	= "boot_reason",
-		.data		= &boot_reason,
-		.maxlen		= sizeof(int),
-		.mode		= 0444,
-		.proc_handler	= proc_dointvec,
-},
 #endif
 /*
  * NOTE: do not add new entries to this table unless you have read
@@ -1502,30 +1518,6 @@ static struct ctl_table fs_table[] = {
 	{ }
 };
 
-#ifdef CONFIG_CCI_DEBUG_DL_MODE_STATUS
-static int triggerPanic;
-static int proc_dotriggerPanic(struct ctl_table *table, int write,
-                     void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-        *((char*) 0) = 0;  // trigger kernel panic;
-        return 0;
-}
-
-static int triggerHang;
-static void hang_work(struct work_struct *work)
-{
-	msleep(10000);  // sleep 10 secods should trigger watchdog
-}
-static DECLARE_WORK(hangwork_struct, hang_work);
-
-static int proc_dotriggerHang(struct ctl_table *table, int write,
-                     void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	schedule_work(&hangwork_struct);
-	return 0;
-}
-#endif
-
 static struct ctl_table debug_table[] = {
 #if defined(CONFIG_X86) || defined(CONFIG_PPC) || defined(CONFIG_SPARC) || \
     defined(CONFIG_S390)
@@ -1546,22 +1538,6 @@ static struct ctl_table debug_table[] = {
 		.proc_handler	= proc_kprobes_optimization_handler,
 		.extra1		= &zero,
 		.extra2		= &one,
-	},
-#endif
-#ifdef CONFIG_CCI_DEBUG_DL_MODE_STATUS
-        {
-                .procname       = "triggerPanic",
-                .data           = &triggerPanic,
-                .maxlen         = sizeof (int),
-                .mode           = 0222,
-                .proc_handler   = proc_dotriggerPanic,
-        },
-	{
-                .procname       = "triggerHang",
-                .data           = &triggerHang,
-                .maxlen         = sizeof (int),
-                .mode           = 0222,
-                .proc_handler   = proc_dotriggerHang,
 	},
 #endif
 	{ }

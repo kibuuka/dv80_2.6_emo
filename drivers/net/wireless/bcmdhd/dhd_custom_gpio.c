@@ -1,8 +1,8 @@
 /*
 * Customer code to add GPIO control during WLAN start/stop
-* Copyright (C) 1999-2011, Broadcom Corporation
+* Copyright (C) 1999-2012, Broadcom Corporation
 * 
-*         Unless you and Broadcom execute a separate written software license
+*      Unless you and Broadcom execute a separate written software license
 * agreement governing use of this software, this software is licensed to you
 * under the terms of the GNU General Public License version 2 (the "GPL"),
 * available at http://www.broadcom.com/licenses/GPLv2.php, with the
@@ -20,13 +20,14 @@
 * software in any way with any other Broadcom software provided under a license
 * other than the GPL, without Broadcom's express prior written consent.
 *
-* $Id: dhd_custom_gpio.c,v 1.2.42.1 2010-10-19 00:41:09 Exp $
+* $Id: dhd_custom_gpio.c 291086 2011-10-21 01:17:24Z $
 */
 
 #include <typedefs.h>
 #include <linuxver.h>
 #include <osl.h>
 #include <bcmutils.h>
+#include <linux/msm-charger.h>
 
 #include <dngl_stats.h>
 #include <dhd.h>
@@ -34,8 +35,11 @@
 #include <wlioctl.h>
 #include <wl_iw.h>
 
+//GPIO
+#include <asm/gpio.h>
+
 #define WL_ERROR(x) printf x
-#define WL_TRACE(x)
+#define WL_TRACE(x) printf x
 
 #ifdef CUSTOMER_HW
 extern  void bcm_wlan_power_off(int);
@@ -43,6 +47,7 @@ extern  void bcm_wlan_power_on(int);
 #endif /* CUSTOMER_HW */
 #if defined(CUSTOMER_HW2)
 #ifdef CONFIG_WIFI_CONTROL_FUNC
+int wifi_set_carddetect(int on);
 int wifi_set_power(int on, unsigned long msec);
 int wifi_get_irq_number(unsigned long *irq_flags_ptr);
 int wifi_get_mac_addr(unsigned char *buf);
@@ -54,6 +59,13 @@ int wifi_get_mac_addr(unsigned char *buf) { return -1; }
 void *wifi_get_country_code(char *ccode) { return NULL; }
 #endif /* CONFIG_WIFI_CONTROL_FUNC */
 #endif /* CUSTOMER_HW2 */
+
+extern int system_loading_update(enum module_loading_op action, int id, int loading);
+
+//B: Bruno
+#define WLAN_RESET		72
+#define WLAN_REG_ON	130
+//E: Bruno
 
 #if defined(OOB_INTR_ONLY)
 
@@ -82,14 +94,17 @@ MODULE_PARM_DESC(dhd_oob_gpio_num, "DHD oob gpio number");
  *  Broadcom provides just reference settings as example.
  *
  */
+#define CUSTOM_OOB_GPIO_NUM   123 //Bruno, 20100806, Bug605, Implement OOB interrupt
+
 int dhd_customer_oob_irq_map(unsigned long *irq_flags_ptr)
 {
 	int  host_oob_irq = 0;
 
 #ifdef CUSTOMER_HW2
 	host_oob_irq = wifi_get_irq_number(irq_flags_ptr);
-
-#else
+	WL_ERROR(("%s: host_oob_irq from wifi_get_irq_number  is (%d)\n",
+	         __FUNCTION__, host_oob_irq));
+#else /* for NOT  CUSTOMER_HW2 */
 #if defined(CUSTOM_OOB_GPIO_NUM)
 	if (dhd_oob_gpio_num < 0) {
 		dhd_oob_gpio_num = CUSTOM_OOB_GPIO_NUM;
@@ -98,7 +113,7 @@ int dhd_customer_oob_irq_map(unsigned long *irq_flags_ptr)
 
 	if (dhd_oob_gpio_num < 0) {
 		WL_ERROR(("%s: ERROR customer specific Host GPIO is NOT defined \n",
-			__FUNCTION__));
+		__FUNCTION__));
 		return (dhd_oob_gpio_num);
 	}
 
@@ -132,31 +147,59 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 #ifdef CUSTOMER_HW2
 			wifi_set_power(0, 0);
 #endif
+			gpio_set_value(WLAN_REG_ON,0);
+			gpio_set_value(WLAN_RESET,0);
+			/* For system loading */
+			system_loading_update(LOADING_CLR, 1, 0);
+			
 			WL_ERROR(("=========== WLAN placed in RESET ========\n"));
 		break;
 
 		case WLAN_RESET_ON:
 			WL_TRACE(("%s: callc customer specific GPIO to remove WLAN RESET\n",
 				__FUNCTION__));
+			gpio_set_value(WLAN_REG_ON,1);
+			gpio_set_value(WLAN_RESET,1);
 #ifdef CUSTOMER_HW
 			bcm_wlan_power_on(2);
 #endif /* CUSTOMER_HW */
 #ifdef CUSTOMER_HW2
 			wifi_set_power(1, 0);
 #endif
+
+			/* For system loading */
+			system_loading_update(LOADING_CLR, 1, 0);
+			system_loading_update(LOADING_SET, 1, 150);
+
 			WL_ERROR(("=========== WLAN going back to live  ========\n"));
 		break;
 
 		case WLAN_POWER_OFF:
-			WL_TRACE(("%s: call customer specific GPIO to turn off WL_REG_ON\n",
+			WL_ERROR(("%s: call customer specific GPIO to turn off WL_REG_ON\n",
 				__FUNCTION__));
 #ifdef CUSTOMER_HW
 			bcm_wlan_power_off(1);
 #endif /* CUSTOMER_HW */
+			gpio_set_value(WLAN_REG_ON,0);
+			gpio_set_value(WLAN_RESET,0);
+
+			/* For system loading */
+			system_loading_update(LOADING_CLR, 1, 0);
+			
+			printk("=========== dhd_customer_gpio_wlan_ctrl : WLAN_POWER_OFF GPIO_72 = %d GPIO_130 = %d======== \n", gpio_get_value(WLAN_RESET), gpio_get_value(WLAN_REG_ON));
 		break;
 
 		case WLAN_POWER_ON:
-			WL_TRACE(("%s: call customer specific GPIO to turn on WL_REG_ON\n",
+			printk("=========== dhd_customer_gpio_wlan_ctrl : WLAN_POWER_ON GPIO_72 = %d GPIO_130 = %d======== \n", gpio_get_value(WLAN_RESET), gpio_get_value(WLAN_REG_ON));
+			gpio_set_value(WLAN_REG_ON,1);
+			gpio_set_value(WLAN_RESET,1);
+
+			/* For system loading */
+			system_loading_update(LOADING_CLR, 1, 0);
+			system_loading_update(LOADING_SET, 1, 150);
+			
+			printk("=========== dhd_customer_gpio_wlan_ctrl : WLAN_POWER_ON GPIO_72 = %d GPIO_130 = %d======== \n", gpio_get_value(WLAN_RESET), gpio_get_value(WLAN_REG_ON));
+			WL_ERROR(("%s: call customer specific GPIO to turn on WL_REG_ON\n",
 				__FUNCTION__));
 #ifdef CUSTOMER_HW
 			bcm_wlan_power_on(1);
@@ -203,6 +246,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"US", "US", 69}, /* input ISO "US" to : US regrev 69 */
 	{"CA", "US", 69}, /* input ISO "CA" to : US regrev 69 */
 	{"EU", "EU", 5},  /* European union countries to : EU regrev 05 */
+	{"JP", "JP", 5},
 	{"AT", "EU", 5},
 	{"BE", "EU", 5},
 	{"BG", "EU", 5},
@@ -241,9 +285,8 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"CH", "CH", 0},
 	{"TR", "TR", 0},
 	{"NO", "NO", 0},
-#endif /* EXMAPLE_TABLE */
-};
-
+#endif /* EXAMPLE_TABLE */
+	};
 
 /* Customized Locale convertor
 *  input : ISO 3166-1 country abbreviation
@@ -289,5 +332,5 @@ void get_customized_country_code(char *country_iso_code, wl_country_t *cspec)
 	cspec->rev = translate_custom_table[0].custom_locale_rev;
 #endif /* EXMAPLE_TABLE */
 	return;
-#endif /* defined(CUSTOMER_HW2) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)) */
+#endif /* defined(CUSTOMER_HW2) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)) */
 }
