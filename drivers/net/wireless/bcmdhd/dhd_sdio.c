@@ -3011,8 +3011,8 @@ dhd_bus_stop(struct dhd_bus *bus, bool enforce_mutex)
 
 	BUS_WAKE(bus);
 
-	/* Change our idea of bus state */
-	bus->dhd->busstate = DHD_BUS_DOWN;
+	// /* Change our idea of bus state */
+	// bus->dhd->busstate = DHD_BUS_DOWN;
 
 	/* Enable clock for device interrupts */
 	dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
@@ -3021,7 +3021,12 @@ dhd_bus_stop(struct dhd_bus *bus, bool enforce_mutex)
 	W_SDREG(0, &bus->regs->hostintmask, retries);
 	local_hostintmask = bus->hostintmask;
 	bus->hostintmask = 0;
-
+	//B: Bruno, 20110714, [DA80][BugID 465], Wi-Fi OOB interrupt issue on suspend mode
+	/* Change bus state after disabling interrupts */
+	/* Change our idea of bus state */
+	bus->dhd->busstate = DHD_BUS_DOWN;
+	//E: Bruno, 20110714, [DA80][BugID 465], Wi-Fi OOB interrupt issue on suspend mode
+	
 	/* Force clocks on backplane to be sure F2 interrupt propagates */
 	saveclk = bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1, SBSDIO_FUNC1_CHIPCLKCSR, &err);
 	if (!err) {

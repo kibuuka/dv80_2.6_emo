@@ -109,6 +109,7 @@ enum dhd_bus_wake_state {
 	WAKE_LOCK_SOFTAP_STOP,
 	WAKE_LOCK_SOFTAP_START,
 	WAKE_LOCK_SOFTAP_THREAD,
+	WAKE_LOCK_SCAN, //Bruno, 20111103, [DA80][BugID 1231], Add wake lock for scan process
 	WAKE_LOCK_MAX
 };
 

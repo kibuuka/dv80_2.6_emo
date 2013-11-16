@@ -3541,11 +3541,11 @@ wl_iw_set_scan(
 	WL_TRACE_SCAN(("\n:%s dev:%s: ###### SIOCSIWSCAN: ##### \n", __FUNCTION__, dev->name));
 
 
-#if defined(CSCAN)
+/*#if defined(CSCAN)
 		WL_ERROR(("%s: Scan from SIOCGIWSCAN not supported\n", __FUNCTION__));
 		return -EINVAL;
 #endif 
-
+*/
 #if defined(SOFTAP)
 	
 	if (ap_cfg_running) {
@@ -3675,10 +3675,11 @@ wl_iw_iscan_set_scan(
 
 	WL_TRACE_SCAN(("%s: SIOCSIWSCAN : ISCAN\n", dev->name));
 
-#if defined(CSCAN)
+/*#if defined(CSCAN)
 		WL_ERROR(("%s: Scan from SIOCGIWSCAN not supported\n", __FUNCTION__));
 		return -EINVAL;
 #endif 
+*/
 
 	
 #if defined(SOFTAP)

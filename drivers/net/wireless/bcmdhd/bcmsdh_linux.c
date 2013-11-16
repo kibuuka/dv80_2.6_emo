@@ -600,7 +600,8 @@ int bcmsdh_register_oob_intr(void * dhdp)
 	SDLX_MSG(("%s Enter \n", __FUNCTION__));
 
 	/* IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE; */
-
+	sdhcinfo->oob_flags = IRQF_SHARED | IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND; //Bruno, 20111121, [DA80][BugID 1422], Device can not be waken up from suspend in airplane mode
+	
 	dev_set_drvdata(sdhcinfo->dev, dhdp);
 
 	if (!sdhcinfo->oob_irq_registered) {
