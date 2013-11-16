@@ -35,7 +35,7 @@ owner_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	filp = skb->sk->sk_socket->file;
 	if (filp == NULL)
 		return ((info->match ^ info->invert) &
-                       (XT_OWNER_UID | XT_OWNER_GID | XT_OWNER_ROUTEGROUP)) == 0;// DELL, josephchen@cienet.com.cn, 09092011
+		       (XT_OWNER_UID | XT_OWNER_GID)) == 0;
 
 	if (info->match & XT_OWNER_UID)
 		if ((filp->f_cred->fsuid >= info->uid_min &&
@@ -48,16 +48,6 @@ owner_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		    filp->f_cred->fsgid <= info->gid_max) ^
 		    !(info->invert & XT_OWNER_GID))
 			return false;
-
-	// BEGIN DELL, josephchen@cienet.com.cn, 09092011
-	if (info->match & XT_OWNER_ROUTEGROUP) {
-		if ((skb->sk->sk_routegroup &&
-		    skb->sk->sk_routegroup == info->route_group) ^
-		    !(info->invert & XT_OWNER_ROUTEGROUP)) {
-			return false;
-            }
-        }
-	// END
 
 	return true;
 }
