@@ -3055,11 +3055,11 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_iearpiece_device,
 //Nick add for modified voice handset audio path 20110927
-#if defined(ORG_VER)
+//#if defined(ORG_VER)
 	&msm_imic_device,
-#else
+//#else
 	&msm_hs_dual_mic_endfire_device,
-#endif
+//#endif
 //Nick add end 20110927
 	&msm_ispkr_stereo_device,
 	&msm_snddev_hdmi_stereo_rx_device,
