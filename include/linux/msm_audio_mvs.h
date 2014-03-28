@@ -51,6 +51,7 @@
 #define MVS_MODE_G729A 14
 #define MVS_MODE_G711A 15
 #define MVS_MODE_G722 16
+#define MVS_MODE_PCM_WB 0x80000000
 
 enum msm_audio_amr_mode {
 	MVS_AMR_MODE_0475, /* AMR 4.75 kbps */
