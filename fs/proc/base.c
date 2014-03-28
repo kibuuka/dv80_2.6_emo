@@ -61,10 +61,8 @@
 #include <linux/string.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
-#include <linux/memcontrol.h>
 #include <linux/mnt_namespace.h>
 #include <linux/mm.h>
-#include <linux/swap.h>
 #include <linux/rcupdate.h>
 #include <linux/kallsyms.h>
 #include <linux/stacktrace.h>
@@ -156,13 +154,18 @@ static unsigned int pid_entry_count_dirs(const struct pid_entry *entries,
 	return count;
 }
 
-static int get_task_root(struct task_struct *task, struct path *root)
+static int get_fs_path(struct task_struct *task, struct path *path, bool root)
 {
+	struct fs_struct *fs;
 	int result = -ENOENT;
 
 	task_lock(task);
-	if (task->fs) {
-		get_fs_root(task->fs, root);
+	fs = task->fs;
+	if (fs) {
+		read_lock(&fs->lock);
+		*path = root ? fs->root : fs->pwd;
+		path_get(path);
+		read_unlock(&fs->lock);
 		result = 0;
 	}
 	task_unlock(task);
@@ -175,12 +178,7 @@ static int proc_cwd_link(struct inode *inode, struct path *path)
 	int result = -ENOENT;
 
 	if (task) {
-		task_lock(task);
-		if (task->fs) {
-			get_fs_pwd(task->fs, path);
-			result = 0;
-		}
-		task_unlock(task);
+		result = get_fs_path(task, path, 0);
 		put_task_struct(task);
 	}
 	return result;
@@ -192,7 +190,7 @@ static int proc_root_link(struct inode *inode, struct path *path)
 	int result = -ENOENT;
 
 	if (task) {
-		result = get_task_root(task, path);
+		result = get_fs_path(task, path, 1);
 		put_task_struct(task);
 	}
 	return result;
@@ -436,14 +434,17 @@ static const struct file_operations proc_lstats_operations = {
 
 #endif
 
+/* The badness from the OOM killer */
+unsigned long badness(struct task_struct *p, unsigned long uptime);
 static int proc_oom_score(struct task_struct *task, char *buffer)
 {
 	unsigned long points = 0;
+	struct timespec uptime;
 
+	do_posix_clock_monotonic_gettime(&uptime);
 	read_lock(&tasklist_lock);
 	if (pid_alive(task))
-		points = oom_badness(task, NULL, NULL,
-					totalram_pages + total_swap_pages);
+		points = badness(task, uptime.tv_sec);
 	read_unlock(&tasklist_lock);
 	return sprintf(buffer, "%lu\n", points);
 }
@@ -595,7 +596,7 @@ static int mounts_open_common(struct inode *inode, struct file *file,
 				get_mnt_ns(ns);
 		}
 		rcu_read_unlock();
-		if (ns && get_task_root(task, &root) == 0)
+		if (ns && get_fs_path(task, &root, 1) == 0)
 			ret = 0;
 		put_task_struct(task);
 	}
@@ -1046,15 +1047,7 @@ static ssize_t oom_adjust_write(struct file *file, const char __user *buf,
 	}
 
 	task->signal->oom_adj = oom_adjust;
-	/*
-	 * Scale /proc/pid/oom_score_adj appropriately ensuring that a maximum
-	 * value is always attainable.
-	 */
-	if (task->signal->oom_adj == OOM_ADJUST_MAX)
-		task->signal->oom_score_adj = OOM_SCORE_ADJ_MAX;
-	else
-		task->signal->oom_score_adj = (oom_adjust * OOM_SCORE_ADJ_MAX) /
-								-OOM_DISABLE;
+
 	unlock_task_sighand(task, &flags);
 	put_task_struct(task);
 
@@ -1092,82 +1085,6 @@ static const struct file_operations proc_oom_adjust_operations = {
 	.read		= oom_adjust_read,
 	.write		= oom_adjust_write,
 	.llseek		= generic_file_llseek,
-};
-
-static ssize_t oom_score_adj_read(struct file *file, char __user *buf,
-					size_t count, loff_t *ppos)
-{
-	struct task_struct *task = get_proc_task(file->f_path.dentry->d_inode);
-	char buffer[PROC_NUMBUF];
-	int oom_score_adj = OOM_SCORE_ADJ_MIN;
-	unsigned long flags;
-	size_t len;
-
-	if (!task)
-		return -ESRCH;
-	if (lock_task_sighand(task, &flags)) {
-		oom_score_adj = task->signal->oom_score_adj;
-		unlock_task_sighand(task, &flags);
-	}
-	put_task_struct(task);
-	len = snprintf(buffer, sizeof(buffer), "%d\n", oom_score_adj);
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-static ssize_t oom_score_adj_write(struct file *file, const char __user *buf,
-					size_t count, loff_t *ppos)
-{
-	struct task_struct *task;
-	char buffer[PROC_NUMBUF];
-	unsigned long flags;
-	long oom_score_adj;
-	int err;
-
-	memset(buffer, 0, sizeof(buffer));
-	if (count > sizeof(buffer) - 1)
-		count = sizeof(buffer) - 1;
-	if (copy_from_user(buffer, buf, count))
-		return -EFAULT;
-
-	err = strict_strtol(strstrip(buffer), 0, &oom_score_adj);
-	if (err)
-		return -EINVAL;
-	if (oom_score_adj < OOM_SCORE_ADJ_MIN ||
-			oom_score_adj > OOM_SCORE_ADJ_MAX)
-		return -EINVAL;
-
-	task = get_proc_task(file->f_path.dentry->d_inode);
-	if (!task)
-		return -ESRCH;
-	if (!lock_task_sighand(task, &flags)) {
-		put_task_struct(task);
-		return -ESRCH;
-	}
-	if (oom_score_adj < task->signal->oom_score_adj &&
-			!capable(CAP_SYS_RESOURCE)) {
-		unlock_task_sighand(task, &flags);
-		put_task_struct(task);
-		return -EACCES;
-	}
-
-	task->signal->oom_score_adj = oom_score_adj;
-	/*
-	 * Scale /proc/pid/oom_adj appropriately ensuring that OOM_DISABLE is
-	 * always attainable.
-	 */
-	if (task->signal->oom_score_adj == OOM_SCORE_ADJ_MIN)
-		task->signal->oom_adj = OOM_DISABLE;
-	else
-		task->signal->oom_adj = (oom_score_adj * OOM_ADJUST_MAX) /
-							OOM_SCORE_ADJ_MAX;
-	unlock_task_sighand(task, &flags);
-	put_task_struct(task);
-	return count;
-}
-
-static const struct file_operations proc_oom_score_adj_operations = {
-	.read		= oom_score_adj_read,
-	.write		= oom_score_adj_write,
 };
 
 #ifdef CONFIG_AUDITSYSCALL
@@ -1543,7 +1460,7 @@ static int do_proc_readlink(struct path *path, char __user *buffer, int buflen)
 	if (!tmp)
 		return -ENOMEM;
 
-	pathname = d_path_with_unreachable(path, tmp, PAGE_SIZE);
+	pathname = d_path(path, tmp, PAGE_SIZE);
 	len = PTR_ERR(pathname);
 	if (IS_ERR(pathname))
 		goto out;
@@ -2744,8 +2661,7 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("cgroup",  S_IRUGO, proc_cgroup_operations),
 #endif
 	INF("oom_score",  S_IRUGO, proc_oom_score),
-	REG("oom_adj",    S_IRUGO|S_IWUSR, proc_oom_adjust_operations),
-	REG("oom_score_adj", S_IRUGO|S_IWUSR, proc_oom_score_adj_operations),
+	ANDROID("oom_adj",S_IRUGO|S_IWUSR, oom_adjust),
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",   S_IWUSR|S_IRUGO, proc_loginuid_operations),
 	REG("sessionid",  S_IRUGO, proc_sessionid_operations),
@@ -3085,7 +3001,6 @@ static const struct pid_entry tid_base_stuff[] = {
 #endif
 	INF("oom_score", S_IRUGO, proc_oom_score),
 	REG("oom_adj",   S_IRUGO|S_IWUSR, proc_oom_adjust_operations),
-	REG("oom_score_adj", S_IRUGO|S_IWUSR, proc_oom_score_adj_operations),
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",  S_IWUSR|S_IRUGO, proc_loginuid_operations),
 	REG("sessionid",  S_IRUSR, proc_sessionid_operations),
